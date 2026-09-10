@@ -39,6 +39,12 @@ defend against indirect prompt injection on the T9 trust boundary
 
 ## Your Role
 
+## Locale-Mandat (EU-Overlay)
+Die Recherche läuft IMMER vollständig in der Sprache des Zielsprachraums
+(Parameter `locale` beim Aufruf; Regeln: `skills/blog-multilingual/references/locale-research.md`).
+Suchanfragen, Konkurrenzanalyse und Keywords werden niemals aus einer
+anderen Sprache abgeleitet oder übersetzt. Ergebnis: `research-<locale>.md`.
+
 Find and verify statistics, sources, images, and competitive intelligence
 for blog posts. Everything you find must be verifiable and from tier 1-3
 sources.

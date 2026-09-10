@@ -95,48 +95,25 @@ in `<source>` first, then translated."
 
 Progress: `Phase 1: Configuration complete, [N] languages selected ([codes])`
 
-### Phase 2: Write Original Blog
+### Phase 2: Native Market Research (pro Ziel-Sprachraum — VOR jedem Schreiben)
+Für jede konfigurierte Zielsprache aus Phase 1:
+1. Delegiere an den `blog-researcher`-Agenten mit Parameter `locale=<locale>` und
+   den Regeln aus `references/locale-research.md`.
+2. Erzeuge je Sprache `multilingual/research-<locale>.md` (natives Keyword-Set,
+   Suchintent, Top-10 aus dem Zielraum, FAQ-/Strukturideen, Quellen+Datum).
+KEINE Recherche-Ausgabe wird aus einer anderen Sprache übernommen oder übersetzt.
 
-Invoke the `blog-write` sub-skill (route through `/blog write` so all
-existing rules apply: template auto-selection, sourced statistics, citation
-capsules, Article schema priority, FAQPage only as an entity signal when
-visible FAQ content exists, internal-link zones, charts, image embedding). Pass the
-topic and any blog-write parameters surfaced by the user.
+### Phase 3: Write Original (informed, nicht blind)
+Schreibe den Ursprungsartikel (Primärsprache) unter Einbeziehung von
+`research-<primäre-locale>.md`. Der Originaltext ist Meisterwerk für Struktur/Tiefe —
+aber NICHT die Recherche-Quelle der anderen Sprachen.
 
-Save the original to `multilingual/{source-lang}/{slug}.{ext}`.
-
-Progress: `Phase 2: Original written, multilingual/{source-lang}/{slug}.{ext}`
-
-### Phase 3: Translate to All Target Languages
-
-For each target language, invoke `blog-translate`:
-
-- Input: the original blog post produced in Phase 2.
-- Target: the specific language code.
-- Run targets in parallel where the runtime supports it (one Task per
-  language) to reduce wall-clock time.
-
-Save translations to `multilingual/{lang}/{localized-slug}.{ext}`.
-
-Progress: `Phase 3: Translating to [lang] ([X]/[N])` per language, then
-`Phase 3: All translations complete`.
-
-### Phase 4: Cultural Adaptation
-
-If `--no-localize` is NOT set, invoke `blog-localize` for every translated
-post:
-
-- Input: the translated blog post.
-- Locale: the target language or region code.
-- Run in parallel.
-
-Apply the localized output only after resolving the generated path inside
-`multilingual/`, rejecting symlinks, and creating a backup when overwriting.
-The localizer swaps brand examples, adapts CTAs, substitutes legal
-references, and adjusts formality. See
-`../blog-localize/SKILL.md` for the full adaptation pass.
-
-Progress: `Phase 4: Cultural adaptation complete for [N] languages`.
+### Phase 4: Native Localization pro Sprache (keine mechanische Übersetzung)
+Für jede Zielsprache: delegiere an `blog-translate`/`blog-translator` mit
+verbindlicher Vorgabe „Nutze das Keyword-Set aus `research-<locale>.md`" —
+Meta, Headings, Alt-Texte, Schema werden auf das NATIVE Set optimiert, nicht
+aus der Ursprungssprache übersetzt. Danach Kulturanpassung (Phase 4b nach
+`skills/blog-translate/references/cultural-adaptation.md`) wie gehabt.
 
 ### Phase 5: International SEO Generation
 
@@ -285,11 +262,11 @@ entity and AI-citation signal, not a Google rich result target.
 - File: multilingual/{source}/{slug}.{ext}
 
 ### Translations
-| Language | File | Localized | Keywords adapted |
-|----------|------|-----------|------------------|
-| de | multilingual/de/{slug}.md | yes | [N] |
-| fr | multilingual/fr/{slug}.md | yes | [N] |
-| es | multilingual/es/{slug}.md | yes | [N] |
+| Language | File | Localized | Keywords adapted | Research |
+|----------|------|-----------|------------------|----------|
+| de | multilingual/de/{slug}.md | yes | [N] | research-de.md ✔ |
+| fr | multilingual/fr/{slug}.md | yes | [N] | research-fr.md ✔ |
+| es | multilingual/es/{slug}.md | yes | [N] | research-es.md ✔ |
 
 ### International SEO assets
 - multilingual/hreflang-tags.html
