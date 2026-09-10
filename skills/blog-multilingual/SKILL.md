@@ -39,10 +39,13 @@ Invoked internally by this orchestrator:
 
 | Component | Source | Required |
 |-----------|--------|----------|
+| `blog-researcher` | claude-blog (this plugin) | Yes (Phase 2) |
 | `blog-write` | claude-blog (this plugin) | Yes |
 | `blog-translate` | claude-blog (this plugin) | Yes |
 | `blog-localize` | claude-blog (this plugin) | Yes (when `--localize` is on, default) |
 | `seo-hreflang` | claude-seo (sibling plugin) | No, falls back to a self-contained generator |
+
+Research rules for Phase 2: `skills/blog-multilingual/references/locale-research.md`.
 
 If `seo-hreflang` is not installed, the orchestrator emits hreflang tags using
 its own minimal generator (Phase 5 below) and notes the limitation in the
@@ -98,22 +101,47 @@ Progress: `Phase 1: Configuration complete, [N] languages selected ([codes])`
 ### Phase 2: Native Market Research (pro Ziel-Sprachraum — VOR jedem Schreiben)
 Für jede konfigurierte Zielsprache aus Phase 1:
 1. Delegiere an den `blog-researcher`-Agenten mit Parameter `locale=<locale>` und
-   den Regeln aus `references/locale-research.md`.
-2. Erzeuge je Sprache `multilingual/research-<locale>.md` (natives Keyword-Set,
-   Suchintent, Top-10 aus dem Zielraum, FAQ-/Strukturideen, Quellen+Datum).
+   den Regeln aus `references/locale-research.md`. Ein Task pro Sprache;
+   Recherchen können parallel laufen.
+2. Der Orchestrator speichert die strukturierten Ergebnisse je Sprache als
+   `multilingual/research-<hreflang>.md` (z. B. `research-de-DE.md`): natives
+   Keyword-Set, Suchintent, Top-10 aus dem Zielsprachraum, FAQ-/Strukturideen,
+   Quellen + Erhebungsdatum.
 KEINE Recherche-Ausgabe wird aus einer anderen Sprache übernommen oder übersetzt.
+Recherchiere zusätzlich die Ursprungssprache (`--source`), falls sie nicht in
+`--languages` enthalten ist — ihr `research-<hreflang>.md` ist Input für Phase 3.
+
+Progress: `Phase 2 — Research complete for [locale] ([X]/[N])`, danach
+`Phase 2 — All research complete`.
 
 ### Phase 3: Write Original (informed, nicht blind)
-Schreibe den Ursprungsartikel (Primärsprache) unter Einbeziehung von
-`research-<primäre-locale>.md`. Der Originaltext ist Meisterwerk für Struktur/Tiefe —
-aber NICHT die Recherche-Quelle der anderen Sprachen.
+Liegt `research-<hreflang der Ursprungssprache>.md` nicht vor, führe zuerst
+Phase 2 für die Ursprungssprache aus.
+Delegiere an das `blog-write`-Skill (Template-Auswahl, Sourced Statistics,
+Citation Capsules, Schema-Priorität wie dort definiert) und übergebe die
+einschlägige `research-<hreflang der Ursprungssprache>.md`. Schreibe den
+Ursprungsartikel (Primärsprache) unter Einbeziehung dieser Recherche. Der
+Originaltext ist Referenz für Struktur und Tiefe — aber NICHT die
+Recherche-Quelle der anderen Sprachen.
+
+Progress: `Phase 3 — Original written, multilingual/{source-lang}/{slug}.{ext}`
 
 ### Phase 4: Native Localization pro Sprache (keine mechanische Übersetzung)
 Für jede Zielsprache: delegiere an `blog-translate`/`blog-translator` mit
-verbindlicher Vorgabe „Nutze das Keyword-Set aus `research-<locale>.md`" —
+verbindlicher Vorgabe „Nutze das Keyword-Set aus `research-<hreflang>.md`" —
 Meta, Headings, Alt-Texte, Schema werden auf das NATIVE Set optimiert, nicht
-aus der Ursprungssprache übersetzt. Danach Kulturanpassung (Phase 4b nach
-`skills/blog-translate/references/cultural-adaptation.md`) wie gehabt.
+aus der Ursprungssprache übersetzt.
+
+Ohne `--no-localize`: delegiere an `blog-localize`; übernimm das Ergebnis erst
+nach Pfadverifikation (innerhalb `multilingual/`, keine Symlinks, Backup bei
+Überschreiben).
+
+#### Phase 4b: Kulturanpassung
+Kulturanpassung nach `skills/blog-translate/references/cultural-adaptation.md`
+wie gehabt.
+
+Progress: `Phase 4 — Native localization complete for [lang] ([X]/[N])`;
+`Phase 4b — Cultural adaptation complete for [N] languages`.
 
 ### Phase 5: International SEO Generation
 
@@ -264,9 +292,9 @@ entity and AI-citation signal, not a Google rich result target.
 ### Translations
 | Language | File | Localized | Keywords adapted | Research |
 |----------|------|-----------|------------------|----------|
-| de | multilingual/de/{slug}.md | yes | [N] | research-de.md ✔ |
-| fr | multilingual/fr/{slug}.md | yes | [N] | research-fr.md ✔ |
-| es | multilingual/es/{slug}.md | yes | [N] | research-es.md ✔ |
+| de-DE | multilingual/de/{slug}.md | yes | [N] | research-de-DE.md ✔ |
+| fr-FR | multilingual/fr/{slug}.md | yes | [N] | research-fr-FR.md ✔ |
+| es-ES | multilingual/es/{slug}.md | yes | [N] | research-es-ES.md ✔ |
 
 ### International SEO assets
 - multilingual/hreflang-tags.html
@@ -304,6 +332,7 @@ entity and AI-citation signal, not a Google rich result target.
 | Scenario | Action |
 |----------|--------|
 | `blog-write` missing | Error: "This skill requires `blog-write`. Reinstall claude-blog." |
+| Research fails for one locale | Continue with remaining locales, mark `Research` as missing in the delivery table |
 | One translation fails | Complete the rest, report partial results, suggest a retry command |
 | Source language equals a target | Skip that target, log a notice |
 | 10 or more target languages | Stop before writing. Explain scaled-content-abuse risk and require reviewed batches of at most 9 target languages |

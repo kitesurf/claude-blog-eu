@@ -51,6 +51,8 @@ The orchestrator provides:
 - **`source_lang`**, BCP 47 tag with ISO 639-1 base code, autodetected if missing.
 - **`keyword_map`**, optional, decisions about which terms stay in the
   source language (loanwords) and which get a localized equivalent.
+- **`keyword_set_ref`**, optional, path to the native keyword-set research
+  file (`research-<hreflang>.md`) of the target language region (EU-Overlay).
 - **`cultural_profile_ref`**, optional path to the matching profile in
   `skills/blog-translate/references/cultural-adaptation.md`.
 - **`output_path`**, where to write the translated file.
@@ -81,6 +83,9 @@ translate anchor text and map URLs to localized equivalents when the target
 locale has a matching page.
 
 ### Step 2: Keyword Localization
+
+Vorrang hat das native Keyword-Set aus `keyword_set_ref`, falls mitgeliefert;
+nur ohne werden Keywords aus der Ursprungssprache abgeleitet.
 
 For the primary keyword and each secondary keyword:
 

@@ -279,3 +279,7 @@ statistic for every section.
 
 Save to the user's project as `briefs/[slug]-brief.md` or to a location
 they specify. Create the `briefs/` directory if it does not exist. Confirm the brief is ready for `/blog write`.
+
+## Sprachraum-Hinweis (EU-Overlay)
+Briefs gelten je Zielsprache; Keyword-/Intent-Recherche immer nativ im
+Zielsprachraum (Regeln: `skills/blog-multilingual/references/locale-research.md`).
