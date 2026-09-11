@@ -143,7 +143,7 @@ neutral Spanish mode.
   Statystyka.pl, NBP, Eurostat. Avoid US-only Pew or Nielsen
   unless explicitly framed as US comparison.
 - **Legal references to swap:** GDPR -> RODO; US consumer-protection
-  claims -> USTRODO (ustawa o prawach konsumenta).
+  claims -> u.p.k. (ustawa o prawach konsumenta).
 
 ## Portugal (`pt-PT`)
 
