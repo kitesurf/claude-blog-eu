@@ -136,6 +136,22 @@ neutral Spanish mode.
   inventing new katakana words. Numbered lists work well; rhetorical
   questions are less common than in EN.
 
+## Poland (`pl-PL`)
+
+- **Currency:** PLN. Format: `1 234,56 zł` (NBSP as thousands separator).
+- **Statistics sources to prefer:** GUS (Główny Urząd Statystyczny),
+  Statystyka.pl, NBP, Eurostat. Avoid US-only Pew or Nielsen
+  unless explicitly framed as US comparison.
+- **Legal references to swap:** GDPR -> RODO; US consumer-protection
+  claims -> USTRODO (ustawa o prawach konsumenta).
+
+## Portugal (`pt-PT`)
+
+- **Currency:** EUR. Format: `1 234,56 €` (NBSP as thousands separator).
+- **Statistics sources to prefer:** INE Portugal (Instituto Nacional
+  de Estatística), Eurostat, Banco de Portugal.
+- **Legal references to swap:** GDPR -> RGPD (PT implementação).
+
 ## Custom-Locale Template
 
 When the target locale lacks a profile here, build one inline. Required

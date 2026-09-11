@@ -98,9 +98,9 @@ in `<source>` first, then translated."
 
 Progress: `Phase 1: Configuration complete, [N] languages selected ([codes])`
 
-### Phase 2: Native Market Research (pro Ziel-Sprachraum — VOR jedem Schreiben)
+### Phase 2: Native Market Research (pro Zielsprachraum - VOR jedem Schreiben)
 Für jede konfigurierte Zielsprache aus Phase 1:
-1. Delegiere an den `blog-researcher`-Agenten mit Parameter `locale=<locale>` und
+1. Delegiere an den `blog-researcher`-Agenten mit Parameter `locale=<hreflang>` und
    den Regeln aus `references/locale-research.md`. Ein Task pro Sprache;
    Recherchen können parallel laufen.
 2. Der Orchestrator speichert die strukturierten Ergebnisse je Sprache als
@@ -109,7 +109,7 @@ Für jede konfigurierte Zielsprache aus Phase 1:
    Quellen + Erhebungsdatum.
 KEINE Recherche-Ausgabe wird aus einer anderen Sprache übernommen oder übersetzt.
 Recherchiere zusätzlich die Ursprungssprache (`--source`), falls sie nicht in
-`--languages` enthalten ist — ihr `research-<hreflang>.md` ist Input für Phase 3.
+`--languages` enthalten ist - ihr `research-<hreflang>.md` ist Input für Phase 3.
 
 Progress: `Phase 2 — Research complete for [locale] ([X]/[N])`, danach
 `Phase 2 — All research complete`.
@@ -120,15 +120,16 @@ Phase 2 für die Ursprungssprache aus.
 Delegiere an das `blog-write`-Skill (Template-Auswahl, Sourced Statistics,
 Citation Capsules, Schema-Priorität wie dort definiert) und übergebe die
 einschlägige `research-<hreflang der Ursprungssprache>.md`. Schreibe den
-Ursprungsartikel (Primärsprache) unter Einbeziehung dieser Recherche. Der
-Originaltext ist Referenz für Struktur und Tiefe — aber NICHT die
+Ursprungsartikel in der Ursprungssprache unter Einbeziehung dieser Recherche.
+Der Originaltext ist Referenz für Struktur und Tiefe, aber NICHT die
 Recherche-Quelle der anderen Sprachen.
 
 Progress: `Phase 3 — Original written, multilingual/{source-lang}/{slug}.{ext}`
 
 ### Phase 4: Native Localization pro Sprache (keine mechanische Übersetzung)
+Localization-Delegationen können parallel laufen (ein Task pro Sprache).
 Für jede Zielsprache: delegiere an `blog-translate`/`blog-translator` mit
-verbindlicher Vorgabe „Nutze das Keyword-Set aus `research-<hreflang>.md`" —
+verbindlicher Vorgabe „Nutze das Keyword-Set aus `research-<hreflang>.md`":
 Meta, Headings, Alt-Texte, Schema werden auf das NATIVE Set optimiert, nicht
 aus der Ursprungssprache übersetzt.
 
@@ -137,8 +138,8 @@ nach Pfadverifikation (innerhalb `multilingual/`, keine Symlinks, Backup bei
 Überschreiben).
 
 #### Phase 4b: Kulturanpassung
-Kulturanpassung nach `skills/blog-translate/references/cultural-adaptation.md`
-wie gehabt.
+Phase 4b wird durch die obige `blog-localize`-Delegation ausgeführt
+(Kulturanpassung nach `cultural-adaptation.md`).
 
 Progress: `Phase 4 — Native localization complete for [lang] ([X]/[N])`;
 `Phase 4b — Cultural adaptation complete for [N] languages`.
