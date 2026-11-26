@@ -62,7 +62,7 @@ ads = [
     # manifest declaration). The reviewed Google Ads API v25.2 integration
     # uses Python client 33.x; keep this major-bounded so the integration and the
     # installed client cannot silently drift apart.
-    "google-ads>=33.0.0,<34.0.0",
+    "google-ads>=33.0.0,<36.0.0",
 ]
 presentation = [
     # v1.9.0 Blog Delivery Contract: enables scripts/blog_preflight.py
