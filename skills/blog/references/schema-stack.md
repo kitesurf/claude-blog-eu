@@ -53,13 +53,13 @@ and `@type` are required by the JSON-LD spec itself.
 | `@context` | JSON-LD required | URL | Always `"https://schema.org"` |
 | `@type` | JSON-LD required | String | `"Article"` or `"BlogPosting"` |
 | `@id` | Recommended | URI | Stable identifier: `{siteUrl}/blog/{slug}#article` |
-| `headline` | Recommended | String | Post title, max 110 characters |
+| `headline` | Recommended | String | Post title; Google documents no length limit, so keep it concise and matching the visible title |
 | `description` | Recommended | String | Accurate description that matches visible content |
 | `datePublished` | Recommended | ISO 8601 | Original publish date |
 | `dateModified` | Recommended | ISO 8601 | Last content update date |
 | `author` | Recommended | Person | Author entity (use @id reference) |
 | `publisher` | Recommended | Organization | Site/company entity (use @id reference) |
-| `image` | Recommended | ImageObject or URL | Featured image, min 1200x630px |
+| `image` | Recommended | ImageObject or URL | Google recommends high-resolution images of at least 50K pixels (width x height) in 16x9, 4x3 and 1x1 ratios; this project's hero is 1200x630 |
 | `mainEntityOfPage` | Recommended | WebPage | The page URL |
 | `wordCount` | Recommended | Integer | Total word count of article body |
 | `articleSection` | Recommended | String | Category/topic (e.g., "SEO") |
@@ -77,7 +77,7 @@ and `@type` are required by the JSON-LD spec itself.
   "@type": "Article",
   "@id": "https://example.com/blog/technical-seo-guide#article",
   "headline": "Complete Guide to Technical SEO in 2026",
-  "description": "Technical SEO has evolved beyond Core Web Vitals. 72% of top-ranking pages now use structured data. Here's how to optimize your site for both traditional search and AI systems.",
+  "description": "Technical SEO has evolved beyond Core Web Vitals. Structured data helps machines read what a page says. Here's how to optimize your site for both traditional search and AI systems.",
   "datePublished": "2026-01-15T08:00:00Z",
   "dateModified": "2026-02-10T14:30:00Z",
   "author": {
@@ -170,7 +170,7 @@ Represents the publishing entity. Referenced by every BlogPosting via the
 | `@id` | Yes | URI | Stable: `{siteUrl}#organization` |
 | `name` | Yes | String | Company/brand name |
 | `url` | Yes | URL | Homepage URL |
-| `logo` | Yes | ImageObject | Company logo (min 112x112px, max 600px wide) |
+| `logo` | Yes | ImageObject | Company logo (min 112x112px) |
 | `sameAs` | Recommended | Array | Social media profile URLs |
 | `contactPoint` | Recommended | ContactPoint | Support/contact info |
 | `description` | Optional | String | Brief company description |
@@ -527,16 +527,21 @@ separate questions.
 | PracticeProblem | Removed Search experience | Documentation removed in January 2026 |
 | Dataset | Dataset Search only | Do not use for ordinary articles |
 | Sitelinks Search Box | No dedicated visual element | Google generates sitelinks algorithmically |
-| QAPage | Supported narrow use | One question with user-submitted answers, not editorial FAQs |
+| QAPage | Supported narrow use | A page about one question with user-submitted answers, not editorial FAQs |
 
 ### What to Use Instead
 
-| Deprecated Type | Alternative |
+| Type without a current rich result | Alternative |
 |----------------|-------------|
 | HowTo | Use standard Article or BlogPosting with clear step headings (H2/H3) |
-| QAPage | Use FAQPage only for a genuinely useful visible editorial FAQ |
 | SpecialAnnouncement | Use standard Article or NewsArticle |
 | ClaimReview | No direct replacement for blogs; use Author entity with credentials |
+
+QAPage is not in this table because it is not deprecated: Google's structured-data
+gallery (checked 2026-10-11) still lists Q&A pages. It applies only to a page
+with one question and user-submitted answers. For an editorial FAQ on a blog,
+plain visible Q&A sections are the default, and FAQPage is optional
+schema.org markup with no Google rich result.
 
 ---
 
@@ -626,7 +631,7 @@ multiple schema types.
       "@type": "Article",
       "@id": "https://example.com/blog/technical-seo-guide#article",
       "headline": "Complete Guide to Technical SEO in 2026",
-      "description": "Technical SEO has evolved beyond Core Web Vitals. 72% of top-ranking pages now use structured data. Here's how to optimize your site for both traditional search and AI systems.",
+      "description": "Technical SEO has evolved beyond Core Web Vitals. Structured data helps machines read what a page says. Here's how to optimize your site for both traditional search and AI systems.",
       "datePublished": "2026-01-15T08:00:00Z",
       "dateModified": "2026-02-10T14:30:00Z",
       "author": {

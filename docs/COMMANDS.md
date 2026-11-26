@@ -6,11 +6,9 @@ blog-write/blog-rewrite.
 Every command is invoked through the main orchestrator
 (`skills/blog/SKILL.md`), which routes to the appropriate sub-skill.
 
-> **For detailed command flows beyond the overview table below, see each
-> sub-skill's `SKILL.md` directly. Sections in this file are abbreviated
-> for the v1.7.0 and v1.8.0 commands that joined after this doc was
-> originally written; the full overview table below is the canonical
-> command list.**
+> **The overview table below is the canonical command list. The sections
+> after it are short summaries; the full flow, options and limits of every
+> command live in its sub-skill's `SKILL.md`.**
 
 ## Command Overview
 
@@ -20,11 +18,11 @@ Every command is invoked through the main orchestrator
 
 | Command | Sub-Skill | Description |
 |---------|-----------|-------------|
-| `write <topic>` | blog-write | Write a new blog post from scratch (v1.9.0: iterates through the 5-gate delivery contract until score 90+ and zero P0, max 3 iterations) |
+| `write <topic>` | blog-write | Write a new blog post from scratch (v1.9.0: iterates through the 5-gate delivery contract until score 90+ and zero P0, at most 3 failed gate runs per draft) |
 | `rewrite <file>` | blog-rewrite | Optimize an existing blog post (v1.9.0: same delivery contract; rewrites must score at least as high as the original) |
 | `analyze <file-or-url>` | blog-analyze | Audit blog quality with 0-100 score |
 | `brief <topic>` | blog-brief | Generate a detailed content brief |
-| `calendar [monthly\|quarterly]` | blog-calendar | Generate an editorial calendar |
+| `calendar [monthly\|quarterly] [niche]` | blog-calendar | Generate an editorial calendar |
 | `strategy <niche>` | blog-strategy | Blog strategy and topic ideation |
 | `outline <topic>` | blog-outline | SERP-informed outline generation |
 | `seo-check <file>` | blog-seo-check | Post-writing SEO validation |
@@ -37,10 +35,10 @@ Every command is invoked through the main orchestrator
 | `factcheck <file>` | blog-factcheck | Verify statistics against cited sources |
 | `persona [create\|list\|use\|show]` | blog-persona | Manage writing personas and voice profiles |
 | `taxonomy [sync\|audit\|suggest]` | blog-taxonomy | Tag/category CMS management |
-| `notebooklm <question>` | blog-notebooklm | Query NotebookLM for source-grounded research |
+| `notebooklm [ask\|discover\|library\|setup\|status\|cleanup] [question-or-url]` | blog-notebooklm | Query NotebookLM for source-grounded research |
 | `audio [generate\|voices\|setup]` | blog-audio | Generate audio narration via Gemini TTS |
 | `google [command] [args]` | blog-google | Google API data: PSI, CrUX, GSC, GA4, NLP, YouTube, Keywords |
-| `cluster [plan\|execute] <seed>` | blog-cluster | Semantic topic-cluster planning + execution (v1.7.0) |
+| `cluster [plan\|execute] [seed-keyword\|cluster-plan.json]` | blog-cluster | Semantic topic-cluster planning + execution (v1.7.0) |
 | `multilingual <topic> --languages <codes>` | blog-multilingual | Write + translate + localize + hreflang (v1.7.0) |
 | `translate <file> --to <codes>` | blog-translate | SEO-optimized translation with format preservation (v1.7.0) |
 | `localize <file> --locale <code>` | blog-localize | Cultural deep-adaptation per locale (v1.7.0) |
@@ -92,11 +90,15 @@ with platform-targeted site operators plus recency filters. Produces a
 ```
 /blog discourse <topic>                          # default 30-day window
 /blog discourse <topic> --days 90                # widen to 90 days
-/blog discourse <topic> --feed-into brief        # chain into /blog brief
-/blog discourse <topic> --feed-into write        # chain into /blog write
-/blog discourse <topic> --feed-into strategy     # chain into /blog strategy
 /blog discourse <topic> --input results.json     # skip search, use pre-gathered results
+/blog discourse <topic> --output brief.md        # write to a chosen path
 ```
+
+There is no chaining flag. To use the brief downstream, generate `DISCOURSE.md`
+first, then run `/blog brief`, `/blog write`, or `/blog strategy`; the
+orchestrator loads `DISCOURSE.md` through the fenced helper. Flags accepted by
+`scripts/discourse_research.py`: `--input`, `--topic`, `--days`, `--output`,
+`--format {markdown,json}`, `--decomposition`.
 
 Workflow phases (full detail in `skills/blog-discourse/SKILL.md`):
 
@@ -133,18 +135,27 @@ AI citation platforms.
 ```
 /blog write <topic>
 /blog write "How to Optimize for AI Search in 2026"
-/blog write kubernetes monitoring --format mdx --words 3000
+/blog write kubernetes monitoring
 ```
+
+`/blog write` takes only the topic as an argument. Things like the output
+format (MDX, Markdown, HTML), a target word count or the audience are not
+flags: say them in plain language ("write it as MDX, about 3,000 words, for
+platform engineers") and the skill asks for whatever it still needs.
 
 ### Workflow
 
 1. **Topic clarification**: Asks for audience, keyword, word count, platform
-2. **Research**: Spawns `blog-researcher` agent to find 8-12 statistics and images
+2. **Research**: Spawns `blog-researcher` agent to find sourced statistics and images
 3. **Outline**: Generates structured outline, presents for approval
-4. **Chart generation**: Creates 2-4 SVG charts via built-in `blog-chart`
-5. **Content writing**: Spawns `blog-writer` agent for the full article
-6. **Quality check**: Verifies all 6 optimization pillars
-7. **Delivery**: Saves file and presents summary
+4. **Draft**: Creates the draft folder and runs Gate 1 capability discovery before writing (with `--reset-iterations` first when a new write starts in a used folder), then spawns the `blog-writer` agent for the full article; the agent may leave `[IMAGE]`, `[CHART]` and `[INTERNAL-LINK]` markers
+5. **Visuals**: The orchestrator resolves every marker (hero image, `blog-chart` SVGs where a chart helps, real internal links); none may remain
+6. **Render and review**: Renders HTML and PDF, issues the review nonce, runs `blog-reviewer`, and saves its report to `review.md`
+7. **Gates**: Runs the 5-gate delivery contract; any edit means re-render, new nonce and a new review; after 3 failed gate runs it stops with the diagnostic
+8. **Delivery**: Presents the artifact folder and the scorecard
+
+The exact order and every gate check are specified once, in
+[`skills/blog/references/blog-delivery-contract.md`](../skills/blog/references/blog-delivery-contract.md).
 
 ### Output
 
@@ -152,11 +163,11 @@ A complete blog post in the detected format (Markdown, MDX, or HTML) with:
 
 - YAML frontmatter (title, description, coverImage, ogImage, date, tags)
 - Purpose-first treatment of important sections, with evidence where needed
-- 8-12 sourced statistics from tier 1-3 sources
-- 3-5 inline images from Pixabay/Unsplash/Pexels
-- 2-4 SVG data visualization charts
+- Sourced statistics from tier 1-3 sources (as many as the article needs, no fixed count)
+- A local hero image and any inline images the topic needs, from licensed sources
+- SVG data visualization charts only where a chart explains the evidence (no fixed count)
 - Optional FAQ when genuine reader questions warrant it
-- Internal linking placeholders
+- Real internal links (markers must be resolved before rendering)
 
 ### Related Commands
 
@@ -184,7 +195,7 @@ the author's voice and unique perspective.
 1. **Audit**: Reads the file, scores it against the quality checklist
 2. **Plan**: Presents section-by-section optimization plan for approval
 3. **Research**: Finds replacement statistics for fabricated/unsourced data
-4. **Chart generation**: Adds SVG charts if the post has fewer than 2
+4. **Chart generation**: Adds an SVG chart where one would explain the evidence better than prose
 5. **Rewrite**: Clarifies important sections, fixes paragraphs, and adds Q&A only when useful
 6. **Verification**: Confirms all quality gates pass
 7. **Summary**: Reports before/after scores and changes made
@@ -209,7 +220,7 @@ The rewritten file in its original format with:
 
 ## /blog analyze
 
-Audit a blog post's quality with a 0-100 score across 6 categories, with
+Audit a blog post's quality with a 0-100 score across 5 categories, with
 prioritized improvement recommendations.
 
 ### Usage
@@ -233,17 +244,16 @@ prioritized improvement recommendations.
 ```
 Blog Quality Report: [Title]
 
-Score: 78/100 - Good
+Score: 75/100 - Acceptable
 
 Score Breakdown
 | Category               | Score | Max |
 |------------------------|-------|-----|
-| Content Quality        | 21    | 25  |
-| Answer-First Format    | 15    | 20  |
-| Statistics & Citations | 18    | 20  |
-| Visual Elements        | 10    | 15  |
-| Schema & Structure     | 7     | 10  |
-| Freshness & Trust      | 7     | 10  |
+| Content Quality        | 24    | 30  |
+| SEO Optimization       | 19    | 25  |
+| E-E-A-T Signals        | 11    | 15  |
+| Technical Elements     | 11    | 15  |
+| AI Citation Readiness  | 10    | 15  |
 
 Issues Found (prioritized: Critical > High > Medium > Low)
 Recommended Actions (top 3 highest-impact fixes)
@@ -282,8 +292,12 @@ statistics research, visual element planning, and a structured outline.
 ```
 /blog brief <topic>
 /blog brief "cloud cost optimization for startups"
-/blog brief ai-search-optimization --audience "marketing managers"
+/blog brief ai-search-optimization
 ```
+
+There are no audience or other flags. The skill asks for the audience and
+business context in its first step, or you can mention them in plain language
+("brief for marketing managers").
 
 ### Workflow
 
@@ -299,7 +313,7 @@ A detailed brief document saved to `briefs/[slug]-brief.md` containing:
 
 - Target keywords (primary, secondary, questions)
 - Search intent analysis
-- Content parameters (word count, format, chart/image counts)
+- Content parameters (word count, format, and image or chart guidance as the topic needs)
 - Recommended title options and meta description
 - Full content outline with section-level guidance
 - Statistics table with sources pre-researched
@@ -328,8 +342,11 @@ freshness update plans, and seasonal opportunities.
 /blog calendar
 /blog calendar monthly
 /blog calendar quarterly
-/blog calendar --niche "devops tooling" --cadence 3
+/blog calendar "devops tooling"
 ```
+
+The optional argument is a niche, as plain text. Publishing cadence is not a
+flag: say it in plain language ("three posts a week") when the skill asks.
 
 ### Output Formats
 
@@ -364,8 +381,11 @@ competitive landscape analysis, and distribution planning.
 ```
 /blog strategy <niche>
 /blog strategy "B2B SaaS marketing"
-/blog strategy ecommerce --competitors "shopify,bigcommerce,woocommerce"
+/blog strategy ecommerce
 ```
+
+Competitors are not a flag: name them in plain language ("compare against
+Shopify, BigCommerce and WooCommerce") or let the skill ask during discovery.
 
 ### Workflow
 
@@ -667,8 +687,12 @@ user-private `~/.claude/settings.json`, mode 0600) per audit VULN-001 fix.
 /blog persona show <name>
 ```
 
-**Flow**: See `skills/blog-persona/SKILL.md`. Personas live in
-`skills/blog/references/personas/`.
+**Flow**: See `skills/blog-persona/SKILL.md`. Personas are saved in your
+project at `<project-root>/.claude-blog/personas/<name>.json`, next to
+BRAND.md and VOICE.md, never inside the installed plugin (a plugin update
+replaces that directory). Files already in the legacy
+`skills/blog-persona/references/personas/` directory are still listed, and you
+can copy them to the project directory.
 
 ---
 
@@ -688,14 +712,22 @@ user-private `~/.claude/settings.json`, mode 0600) per audit VULN-001 fix.
 
 ## /blog notebooklm
 
-**Purpose**: query NotebookLM for source-grounded research via patchright
-browser automation.
+**Purpose**: query NotebookLM (renamed Gemini Notebook; notebook URLs are on
+`notebook.google.com`, and the legacy `notebooklm.google.com` host is still
+accepted) for source-grounded research via patchright browser automation.
 
 ```
-/blog notebooklm <question>
+/blog notebooklm ask <question>
+/blog notebooklm discover <url>
+/blog notebooklm library [list|add <url>|search <query>|remove <id>]
+/blog notebooklm setup
+/blog notebooklm status
+/blog notebooklm cleanup
 ```
 
-**Flow**: See `skills/blog-notebooklm/SKILL.md`. Cookies at
+**Flow**: See `skills/blog-notebooklm/SKILL.md`. With `--json`, the notebook's
+`answer` is returned as untrusted data and the follow-up prompt arrives
+separately in `follow_up_reminder`. Cookies at
 `~/.claude/skills/blog-notebooklm/data/` written mode 0600 per audit
 VULN-004 fix.
 
@@ -712,6 +744,10 @@ VULN-004 fix.
 ```
 
 **Flow**: See `skills/blog-audio/SKILL.md`. 30-voice catalog in references.
+`generate_audio.py` defaults to the `flash38` model alias, and
+`--max-chunks` (default 12) refuses runs that would make more billed API calls
+than you intended. Run `generate_audio.py --help` for the current model
+aliases and which are deprecated.
 
 ---
 
@@ -727,7 +763,12 @@ YouTube, Keywords). Indexing API use is limited to JobPosting or livestream URLs
 **Flow**: See `skills/blog-google/SKILL.md`. 13 commands across 4 credential
 tiers. OAuth state CSRF + chmod 0600 token storage per audit VULN-002 +
 VULN-008 fixes. Default scopes are read-only (`gsc_readonly + ga4`); pass
-`--scopes` to elevate.
+`--scopes` to elevate. `gsc_query.py --days N` sets the window length (default
+28 days, ending 3 days ago because of Search Console data lag).
+`indexing_notify.py` refuses to submit anything unless you pass
+`--confirm-eligible`, which asserts that every URL is a JobPosting page or a
+BroadcastEvent-in-VideoObject page, the only types the Indexing API supports;
+ordinary blog posts are not eligible.
 
 ---
 
@@ -737,12 +778,15 @@ VULN-008 fixes. Default scopes are read-only (`gsc_readonly + ga4`); pass
 architecture with shared cluster context.
 
 ```
-/blog cluster <seed-topic>
+/blog cluster
+/blog cluster plan <seed-keyword>
+/blog cluster plan --from strategy [path]
+/blog cluster execute [path-to-plan]
 ```
 
 **Flow**: See `skills/blog-cluster/SKILL.md`. Adapted from
-[semantic-cluster-engine](https://github.com/Drfiya/semantic-cluster-engine)
-(AI Marketing Hub Pro Hub Challenge winner).
+semantic-cluster-engine (AI Marketing Hub Pro Hub Challenge winner; the
+original repository is no longer available as of 2026-10-12).
 
 ---
 
@@ -782,7 +826,7 @@ blog-translate, blog-localize, plus optional `seo-hreflang`.
 **Purpose**: SEO-optimized translation with format preservation.
 
 ```
-/blog translate <file-path> <target-lang>
+/blog translate <file-path> --to <codes>
 ```
 
 **Flow**: See `skills/blog-translate/SKILL.md`. Spawns `blog-translator`
@@ -796,7 +840,7 @@ agent (least-privilege: Read/Write/Edit/Glob/Grep, no Bash, no Web).
 Hispanic, Japanese profiles + custom template).
 
 ```
-/blog localize <file-path> <locale>
+/blog localize <file-path> --locale <code>
 ```
 
 **Flow**: See `skills/blog-localize/SKILL.md`.
@@ -816,6 +860,45 @@ correctness, meta-tag parity, freshness).
 
 ---
 
+## /blog style
+
+**Purpose**: learn a measurable author voice profile from 5 to 10 existing
+posts, to feed `VOICE.md`, `/blog persona` and `/blog write`. The profile
+describes style (sentence length, vocabulary, transitions, phrasing); it does
+not detect or attribute authorship.
+
+```
+/blog style learn <paths>
+```
+
+The learner is `scripts/style_learn.py`; it accepts files or directories and
+the options `--min`, `--format {json,markdown}` and `--output`. Fewer samples
+than the minimum (default 5) produce a warning, not a failure.
+
+**Flow**: See `skills/blog-style/SKILL.md`.
+
+---
+
+## /blog decay
+
+**Purpose**: compare two Google Search Console page exports (current and
+previous period) and flag pages whose clicks or impressions fell by at least a
+threshold (default 20%), with a triage hint. The threshold is a screening
+heuristic, not proof of decay.
+
+```
+/blog decay <current-gsc.json> <previous-gsc.json>
+/blog decay <current-gsc.json> <previous-gsc.json> --threshold 0.30 --metric impressions
+```
+
+The analyzer is `scripts/content_decay.py` (`--threshold`, `--metric
+{clicks,impressions}`, `--format {json,markdown}`, `--output`). Both exports
+must come from the same property and use one URL form.
+
+**Flow**: See `skills/blog-decay/SKILL.md`.
+
+---
+
 ## Command Routing
 
 The main orchestrator (`skills/blog/SKILL.md`) parses user input and routes to
@@ -828,8 +911,8 @@ User Input                                  Routes To
 /blog rewrite <file>                    --> blog-rewrite
 /blog analyze <file-or-url>             --> blog-analyze
 /blog brief <topic>                     --> blog-brief
-/blog calendar [period]                 --> blog-calendar
-/blog plan [period]                     --> blog-calendar
+/blog calendar [monthly|quarterly] [niche] --> blog-calendar
+/blog plan [monthly|quarterly] [niche]  --> blog-calendar
 /blog strategy <niche>                  --> blog-strategy
 /blog ideation <niche>                  --> blog-strategy
 /blog outline <topic>                   --> blog-outline
@@ -846,14 +929,16 @@ User Input                                  Routes To
 /blog brand [init|show|update]          --> blog-brand               (v1.8.0)
 /blog discourse <topic>                 --> blog-discourse           (v1.8.0)
 /blog taxonomy [suggest|sync|audit]     --> blog-taxonomy
-/blog notebooklm <question>             --> blog-notebooklm
+/blog notebooklm [ask|discover|...] <arg> --> blog-notebooklm
 /blog audio [generate|voices|setup]     --> blog-audio
 /blog google [command] [args]           --> blog-google
-/blog cluster [plan|execute] <seed>     --> blog-cluster
+/blog cluster [plan|execute] [seed-or-plan] --> blog-cluster
 /blog multilingual <topic> --languages  --> blog-multilingual
 /blog translate <file> --to             --> blog-translate
 /blog localize <file> --locale          --> blog-localize
 /blog locale-audit <directory>          --> blog-locale-audit
+/blog style learn <paths>               --> blog-style               (v1.10.0)
+/blog decay <current> <previous>        --> blog-decay               (v1.10.0)
 /blog flow [find|optimize|win|prompts|sync] --> blog-flow
 ```
 

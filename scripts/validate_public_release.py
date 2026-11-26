@@ -16,11 +16,25 @@ import sys
 from pathlib import Path
 
 PUBLIC_REPOSITORY = "https://github.com/AgriciDaniel/claude-blog"
-PUBLIC_VERSION = "2.2.0"
-PUBLIC_SLUG = "claude-blog@agricidaniel-blog"
+PUBLIC_VERSION = "2.3.2"
+PUBLIC_PLUGIN_IDENTIFIER = "claude-blog"
+PUBLIC_SLUG = f"{PUBLIC_PLUGIN_IDENTIFIER}@agricidaniel-blog"
 PUBLIC_OWNER = "AgriciDaniel"
 PUBLIC_OWNER_URL = "https://github.com/AgriciDaniel"
 PUBLIC_MARKETPLACE = "agricidaniel-blog"
+# Blog Studio is served from the blog-studio branch of this repository, pinned
+# to a commit, because Claude Desktop refuses a plugin folder that holds a
+# nested .claude-plugin/plugin.json. The check below reads the entry only; it
+# never contacts the network.
+STUDIO_PLUGIN = "blog-studio"
+STUDIO_SOURCE = {
+    "source": "git-subdir",
+    "url": "AgriciDaniel/claude-blog",
+    "path": "plugins/blog-studio",
+    "ref": "blog-studio",
+}
+STUDIO_HOMEPAGE = f"{PUBLIC_REPOSITORY}/tree/blog-studio/plugins/blog-studio"
+COMMIT_SHA_RE = re.compile(r"[0-9a-f]{40}")
 PUBLIC_RAW_INSTALL_SH = (
     "https://raw.githubusercontent.com/AgriciDaniel/claude-blog/main/install.sh"
 )
@@ -34,8 +48,9 @@ PUBLIC_PINNED_INSTALL_SH = (
 PUBLIC_DISCUSSIONS = f"{PUBLIC_REPOSITORY}/discussions"
 PUBLIC_SECURITY_ADVISORY = f"{PUBLIC_REPOSITORY}/security/advisories/new"
 PUBLIC_DOCUMENTATION = f"{PUBLIC_REPOSITORY}/tree/main/docs"
-SECURITY_CHECKOUT_RE = re.compile(
-    r"\bgit checkout v([0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?)\b"
+SECURITY_CHECKOUT_GUIDANCE = "git checkout <commit-sha-or-release-tag>"
+PREOWNERSHIP_INSTALLER_PIN_RE = re.compile(
+    r"(?:git checkout\s+|CLAUDE_BLOG_REF\s*=\s*[\"']?|/claude-blog/)v2\.2\.0(?:/install\.(?:sh|ps1))?\b"
 )
 SURFACES = (
     "README.md",
@@ -48,6 +63,8 @@ SURFACES = (
     ".github/SECURITY.md",
     "install.sh",
     "install.ps1",
+    "uninstall.sh",
+    "uninstall.ps1",
     "skills/blog/SKILL.md",
 )
 FORBIDDEN_PATTERNS = {
@@ -104,9 +121,34 @@ def validate(root: Path) -> dict:
             if path.name.startswith("PUBLIC-BACKLOG-TRIAGE-"):
                 errors.append({"kind": "private_triage_note", "file": relative})
 
+    # Inspect maintained execution and instruction surfaces as well as the
+    # canonical release metadata. Historical raw captures and test fixtures
+    # are evidence, and are intentionally outside this distribution check.
+    for directory, patterns in {
+        "skills": ("*.md", "*.py", "*.json", "*.txt"),
+        "agents": ("*.md",),
+        "scripts": ("*.py", "*.ps1"),
+        "data": ("*.json",),
+        ".github/workflows": ("*.yml", "*.yaml"),
+    }.items():
+        for pattern in patterns:
+            for path in (root / directory).rglob(pattern):
+                if path.is_symlink() or any(part in {".venv", "__pycache__"} for part in path.parts):
+                    continue
+                relative = path.relative_to(root).as_posix()
+                contents.setdefault(relative, path.read_text(encoding="utf-8"))
+
     for relative, text in contents.items():
+        if relative == "scripts/validate_public_release.py":
+            # The detector's own forbidden-pattern definitions contain the
+            # strings they must reject elsewhere. Keep scanning its runtime
+            # code, excluding only this declarative pattern table.
+            text = re.sub(
+                r"(?ms)^FORBIDDEN_PATTERNS = \{.*?(?=^RAW_INSTALLER_RE =)",
+                "", text,
+            )
         for kind, pattern in FORBIDDEN_PATTERNS.items():
-            if kind == "private_repository_url" and relative not in SURFACES:
+            if kind == "private_repository_url" and relative.startswith("docs/"):
                 # Attribution and migration history may legitimately mention
                 # the private repository. Canonical distribution surfaces may
                 # not identify it as the public package.
@@ -143,13 +185,10 @@ def validate(root: Path) -> dict:
 
     version_fragments = {
         "README.md": (
-            f"git checkout v{PUBLIC_VERSION}",
-            f"CLAUDE_BLOG_REF=v{PUBLIC_VERSION}",
+            "git checkout <commit-sha-or-release-tag>",
+            "CLAUDE_BLOG_REF=<commit-sha-or-release-tag>",
         ),
-        "CLAUDE.md": (
-            f"CLAUDE_BLOG_REF=v{PUBLIC_VERSION}",
-            PUBLIC_PINNED_INSTALL_SH,
-        ),
+        "CLAUDE.md": ("CLAUDE_BLOG_REF=<commit-sha-or-release-tag>",),
         "CITATION.cff": (f"version: {PUBLIC_VERSION}",),
         "pyproject.toml": (f'version = "{PUBLIC_VERSION}"',),
         ".claude-plugin/plugin.json": (f'"version": "{PUBLIC_VERSION}"',),
@@ -169,16 +208,28 @@ def validate(root: Path) -> dict:
                     }
                 )
 
+    # v2.2.0 predates the ownership-aware installer, and its uninstall.sh runs
+    # an unguarded recursive delete. Install documentation must not pin to it.
+    for relative in ("README.md", "CLAUDE.md", "docs/INSTALLATION.md", ".github/SECURITY.md"):
+        for match in PREOWNERSHIP_INSTALLER_PIN_RE.finditer(contents.get(relative, "")):
+            errors.append(
+                {
+                    "kind": "unsafe_preownership_installer_pin",
+                    "file": relative,
+                    "actual": match.group(0),
+                }
+            )
+
     citation = contents.get("CITATION.cff", "")
+    # SECURITY.md must give the same pin-a-reviewed-ref guidance as the README
+    # and must never tell users to run the v2.2.0 installer (checked above).
     security = contents.get(".github/SECURITY.md", "")
-    security_versions = sorted(set(SECURITY_CHECKOUT_RE.findall(security)))
-    if security_versions != [PUBLIC_VERSION]:
+    if SECURITY_CHECKOUT_GUIDANCE not in security:
         errors.append(
             {
-                "kind": "invalid_public_security_version",
+                "kind": "invalid_public_security_guidance",
                 "file": ".github/SECURITY.md",
-                "expected": PUBLIC_VERSION,
-                "actual": security_versions,
+                "expected": SECURITY_CHECKOUT_GUIDANCE,
             }
         )
 
@@ -270,6 +321,7 @@ def validate(root: Path) -> dict:
         )
     else:
         expected_plugin = {
+            "name": PUBLIC_PLUGIN_IDENTIFIER,
             "homepage": PUBLIC_REPOSITORY,
             "repository": PUBLIC_REPOSITORY,
         }
@@ -306,7 +358,9 @@ def validate(root: Path) -> dict:
     marketplace_text = contents.get(".claude-plugin/marketplace.json", "")
     try:
         marketplace = json.loads(marketplace_text)
-    except json.JSONDecodeError:
+        if not isinstance(marketplace, dict):
+            raise ValueError("marketplace must be an object")
+    except ValueError:  # JSONDecodeError is a ValueError
         errors.append(
             {"kind": "invalid_json", "file": ".claude-plugin/marketplace.json"}
         )
@@ -335,7 +389,7 @@ def validate(root: Path) -> dict:
             not isinstance(plugins, list)
             or not any(
                 isinstance(entry, dict)
-                and entry.get("name") == "claude-blog"
+                and entry.get("name") == PUBLIC_PLUGIN_IDENTIFIER
                 and entry.get("source") == "./"
                 for entry in plugins
             )
@@ -344,6 +398,54 @@ def validate(root: Path) -> dict:
                 {
                     "kind": "invalid_public_marketplace_plugin",
                     "file": ".claude-plugin/marketplace.json",
+                }
+            )
+        entries = [entry for entry in plugins if isinstance(entry, dict)] if isinstance(plugins, list) else []
+        # Only claude-blog may live inside the plugin root; any other local
+        # source would put a second plugin.json inside the claude-blog folder.
+        for entry in entries:
+            if entry.get("name") != PUBLIC_PLUGIN_IDENTIFIER and not isinstance(entry.get("source"), dict):
+                errors.append(
+                    {
+                        "kind": "local_companion_source",
+                        "file": ".claude-plugin/marketplace.json",
+                        "plugin": str(entry.get("name")),
+                    }
+                )
+        studio_entries = [entry for entry in entries if entry.get("name") == STUDIO_PLUGIN]
+        if studio_entries:
+            studio = studio_entries[0]
+            source = studio.get("source")
+            if (
+                len(studio_entries) != 1
+                or not isinstance(source, dict)
+                or set(source) != {*STUDIO_SOURCE, "sha"}
+                or any(source.get(key) != value for key, value in STUDIO_SOURCE.items())
+                or not isinstance(source.get("sha"), str)
+                or not COMMIT_SHA_RE.fullmatch(source["sha"])
+                or not isinstance(studio.get("version"), str)
+                or studio.get("homepage") != STUDIO_HOMEPAGE
+            ):
+                errors.append(
+                    {
+                        "kind": "invalid_studio_distribution",
+                        "file": ".claude-plugin/marketplace.json",
+                        "plugin": STUDIO_PLUGIN,
+                    }
+                )
+
+    root_manifest = root / ".claude-plugin" / "plugin.json"
+    for manifest in sorted(root.rglob("plugin.json")):
+        relative_parts = set(manifest.relative_to(root).parts)
+        if (
+            manifest.parent.name == ".claude-plugin"
+            and manifest != root_manifest
+            and not {".git", ".venv", "node_modules"} & relative_parts
+        ):
+            errors.append(
+                {
+                    "kind": "nested_plugin_manifest",
+                    "file": manifest.relative_to(root).as_posix(),
                 }
             )
 

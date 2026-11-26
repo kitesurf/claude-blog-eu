@@ -5,7 +5,321 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.3.2] - 2026-11-03
+
+### Security
+
+- Paid image generation is opt-in in code. `scripts/generate_hero.py` uses the paid Gemini route only with the new `--allow-paid` flag and a `GOOGLE_AI_API_KEY` or `GEMINI_API_KEY`; without the flag a set key is ignored, the free rungs run, and the JSON reports `paid_gemini_skipped`. Skills add the flag only after the `blog-image` cost and consent gate. The old `env -u` workaround lived in prose, and `blog-image` and `blog-cluster` unset only `GOOGLE_AI_API_KEY`.
+- The repair counter moved out of the draft folder, which `blog-writer` can write to, into the review state directory next to the nonce (`<state dir>/<sha256 of the draft>.iterations.json`). An old `D/.iteration-count` is ignored.
+- `generate_hero.py` checks every `hero.*` target and `hero-credit.txt` before any provider runs and stops, without writing, deleting or spending anything, when one is a symlink, a directory or not writable.
+- The Blog Studio plugin runs both engine scripts with `python3 -E`, so `PYTHON*` environment variables cannot redirect them while packages installed with `pip --user` still load.
+- The OAuth loopback listener in `google_auth.py` gives each connection a timeout, so a silent client cannot hold it past the deadline.
+
+### Fixed
+
+- Make Blog Studio 0.2.0 work with the real engine (#102). The plugin called a status script and a preflight flag that did not exist, so it could never show a passing result. `scripts/blog_studio_status.py` is new (read-only; prints the status JSON the plugin parses, with `--draft`, `--project-root` and `--expected-run`). `scripts/blog_preflight.py` gains `--project-root` and writes an additive `evidence` object (including a 32-hex `run_id`) into `preflight-report.json`. Stdout modes, other flags and exit codes are unchanged, and the report `draft` field records the draft as an absolute path with symlinks not resolved. An unfinished or iteration-capped run shows as Blocked, never as passed or stale.
+- `--project-root` accepts paths through system symlinks such as `/home` to `/var/home` (Fedora atomic) and macOS `/tmp`; symlinks between the project root and the draft and `..` escapes are still refused.
+- Gate 4 requires all five category scores, and the overall must equal their sum. A `review.md` with only an overall score no longer passes.
+- Gate 1 checks for a real hero path instead of assuming Openverse. Free paths are a valid hero already in the draft folder, a stock key, or Openverse, probed for up to 3 seconds when neither of the others exists. The Banana tool and a Gemini key are paid paths: with only those, Gate 1 passes with a `paid_only` warning that the user must approve the cost. It blocks only when there is no path. `capabilities.json` reports them in `hero_paths`.
+- The repair loop stops after 3 failed full gate runs per draft, as the skills say; the next full run exits 2. Passing runs never count, so a delivered post can be checked again. The counter is locked across concurrent runs, and an unwritable state directory gives a clear error instead of a traceback. `--reset-iterations` clears the counter without running gates and is the first step when a new write, rewrite or edit pass on a delivered post reuses a draft folder.
+- New `--manual-check` flag runs the gates without touching the repair counter. Blog Studio's Run checks uses it, so checks no longer use up a draft's repair runs, and a capped draft shows as Blocked instead of an execution error.
+- BRAND.md, VOICE.md and DISCOURSE.md are looked up in the project (`--project-root`, otherwise the current directory), not the install folder.
+- The bypass warning prints to stderr in every mode, `--json` included, with the failed gates.
+- `generate_hero.py` keeps an existing hero only when it is a real image of at least 1200x630 under a lowercase `hero.<ext>` name, the same bar Gates 1 and 2 use. It keeps the first valid one, never overwrites a valid file without `--replace`, and replaces or removes invalid ones, listing them in `replaced_invalid`. Every write stages the image and `hero-credit.txt` together and removes stale siblings only after both are in place.
+- Harden the quality gate, renderer, hero ladder and setup: staged names are read with `-z`, JSON-LD escapes `<`, `>` and `&`, canonical URLs must be full http(s) URLs, symlinked renderer input is refused on Windows, an undecodable image skips to the next provider, the OAuth callback waits for the right state, currentness feed errors are clear, pip runs with a timeout, `os.fchmod` is optional on Windows, and `install.ps1` skips the Microsoft Store python stubs.
+- Add `tests/test_blog_studio.py` and `tests/test_blog_studio_integration.py`, which run the real scripts the way the plugin does and mirror its response parser, plus a `blog-studio` CI job (strict plugin validation and the 59 test-kit tests on a pinned Claude Code release). The companion's reference type check still reports 3 errors in `hooks/view.ts`, so CI does not run it yet.
+- Extend `scripts/consistency_check.py` and `scripts/validate_public_release.py` to cover `plugins/` (the studio version must match its marketplace entry), and correct the script, reference and screenshot counts in the docs, the `installer_ownership.py` release note and the `/blog style` and `/blog decay` command sections.
+
+### Changed
+
+- Blog Studio moved off main to the `blog-studio` branch of this repository (`plugins/blog-studio`), because Claude Desktop refuses a plugin folder with a nested plugin manifest ("plugin.json must be at .claude-plugin/plugin.json at the plugin root ... found nested"), and the claude-blog plugin folder is the whole repository. The marketplace now installs Studio 0.3.0 from that branch with a `git-subdir` source pinned to a commit. The install id and commands are unchanged: `/plugin marketplace add AgriciDaniel/claude-blog` and then `/plugin install blog-studio@agricidaniel-blog`. Studio 0.3.0 needs claude-blog 2.3.2 or later. Main drops the `blog-studio` CI job, the `plugins/` coverage in `consistency_check.py` and `validate_public_release.py`, and the plugin validator's tolerance for the Studio `types` field. `validate_public_release.py` now checks the pinned entry's shape and rejects nested plugin manifests, and `tests/test_manifest_layout.py` covers both. The engine side stays on main: `scripts/blog_studio_status.py`, `blog_preflight.py --project-root` and `--manual-check`, still covered by `tests/test_blog_studio.py` and `tests/test_blog_studio_integration.py`.
+- Remove `brain/.claude-plugin/` (`plugin.json` and `marketplace.json`), a nested manifest left from when the brain was planned as its own plugin repository. It pointed at a repository that does not exist, nothing installs the brain as a plugin, and Claude Desktop refuses the claude-blog folder while it is there. The brain keeps its own `install.sh`.
+- Ignore `/reports/`, where `/blog audit` writes its output.
+- New README with six animated scenes (`assets/readme/`) starring the three bots, rebuilt around install, commands, team, pricing and how a post ships. Font credits for the embedded Geist, Geist Mono, Silkscreen and Pixelify Sans subsets are in NOTICE, and the OFL 1.1 text ships in `assets/readme/OFL.txt`.
+- Add a plugin icon (`.claude-plugin/icon.png`); Claude Code 2.1.312 and later warn without one.
+- The delivery sequence is defined once in `blog-delivery-contract.md`, and the skills point to it. The draft folder is created first and Gate 1 runs before writing. After 3 failed runs the user gets the diagnostic, not the draft. The contract no longer claims that `lint_prose.py` runs inside Gate 4.
+- `blog-rewrite` keeps the existing hero by default and passes `--replace` only when the topic changed substantially.
+- `blog-multilingual` and `blog-cluster` run their sub-skills one at a time, because an agent cannot start another agent.
+- Argument hints match `docs/COMMANDS.md` (`calendar`, `analyze`, `notebooklm`, `factcheck`, `flow`), and `/blog strategy` treats 80 as a planning goal, as `quality-scoring.md` does.
+- Add five Search Central documentation updates (2026-10-08 to 2026-10-26) to the Google ledger, which clears the failing weekly currentness workflow.
+- Lift the `Pillow<13` cap and refresh pillow 13.0.0, filelock, brotli, brotlicffi, setuptools, nltk, pyasn1 0.6.5 and certifi 2026.10.23 in `uv.lock` and the pip locks. SECURITY.md describes the Dependabot setup.
+- `brain/` is MIT licensed like the rest of the repository, and its third-party notices list Google Search Central prose as CC BY 4.0. `brain/PUBLISHING_NOTICE.md` describes `.raw` and the ledgers as tracked evidence kept off the website projection.
+- Turn off Dependabot version-update PRs (`open-pull-requests-limit: 0`). Hash-locked pip bumps need a maintainer relock, so the PRs only added notifications. Vulnerability alerts stay on.
+- Refresh the Google and audio dependency floors and their hash locks: `google-genai` 2.29.0, `google-auth` 2.61.0, `google-auth-oauthlib` >=1.5.0, `google-auth-httplib2` >=0.4.4. The locks stay on releases at least a week old.
+- Move the reviewed `actions/setup-node` pin to v7.1.0 (`949feb2`).
+
+### Removed
+
+- `reports/`, four internal verification reports that did not belong in the public repository.
+- The stale v1.11.0 copy of the skill under `brain/.raw/sources/claude-blog-skill/` (104 files).
+
+## [2.3.1] - 2026-10-13
+
+### Added
+
+- Ship Blog Studio 0.2.0 as an optional second plugin of the same marketplace
+  (`plugins/blog-studio`, install with `/plugin install blog-studio@agricidaniel-blog`).
+  It is a Claude Code mod: a status band, a live pipeline and five-gate review
+  panel, a history of past blogs and a Run checks control that runs the strict
+  preflight. Strict plugin validation passes and its 59 test-kit tests pass.
+  It is not part of the `claude-blog` plugin and the standalone installers do
+  not enable it.
+
+### Changed
+
+- Blog Studio refers to the engine as `claude-blog` in its messages and docs.
+- Version 2.3.1 on every release surface; no change to the delivery gates,
+  scripts or skills.
+- CI tolerates one more exact finding from the 2.1.218 validator, which predates
+  mods and reports Blog Studio's `types` manifest key as unknown.
+
+## [2.3.0] - 2026-10-13
+
+### Fixed
+
+- Skip local virtualenvs (`.venv`, `venv`, `node_modules`) in the secret scan so a
+  contributor's environment no longer fails it. The pinned-release installer
+  test now reads the expected checkout from the tag instead of a fixed SHA.
+- Reject reviewer scorecards with missing, negated or contradictory P0
+  clearance, duplicate scores/nonces/decisions, or missing decision reasons.
+- Enforce the required browser check in strict delivery mode, and preserve
+  blocked diagnostics when preview mode explicitly bypasses delivery.
+- Validate external-link redirects and bounded HEAD-to-GET recovery, with
+  exact documented 403/405 exceptions that retain network safety checks.
+- Use canonical Openverse search, honor generated image MIME types, discover
+  PNG, JPEG and WebP heroes, and support WeasyPrint 70's guarded URL fetcher.
+- Reject symlinked rendering destinations and promote HTML and PDF outputs
+  through exclusive temporary files.
+- Analyze nested static-site content deterministically without following
+  symlinks into unrelated directories; support declared Indonesian content.
+- Diagnose disabled Google APIs, key restrictions, billing and quota errors
+  before offering permission advice.
+- Stop ordinary Google, audio and NotebookLM commands from installing
+  environments or browsers implicitly. Verify file ownership before Unix,
+  Windows and Brain installation changes, preserving user additions and
+  refusing modified managed files and parent-traversal manifest paths before
+  deletion.
+- Reconcile exact known public legacy installations using reviewed file hashes
+  and manifest scopes, with transactional replacement and safe empty-directory
+  pruning. Reject Windows reparse-point paths and unknown collisions before
+  mutation; exercise native Windows lifecycle scenarios in dedicated CI jobs.
+- Use canonical Claude Code invocation metadata and a shared safe-YAML
+  validator; resolve helpers and references from trusted installed roots when
+  the caller's working directory is unrelated or untrusted.
+- Reject retired, unverified or expired Brain evidence in all three adapters
+  and current wiki advice. Stage failed retrieval attempts separately from
+  reviewed source records and preserve immutable raw snapshots during tests.
+- Improve normal-text link and byline contrast in light and dark rendering.
+- Compare visible headline, author, publication date and hero with JSON-LD
+  in both delivery gates, including declared Open Graph image agreement.
+- Disable implicit proxies for guarded fetches, pin Brain source connections
+  to validated public addresses, and reject symlinked hero output ancestors.
+- Require shipped, hash-checked Brain excerpt artifacts with source and review
+  provenance, while separating excerpt integrity from full-capture review.
+- Handle normal Git stderr correctly on PowerShell 5.1, select exactly one Git
+  executable when PATH contains duplicates, account for the exact PowerShell
+  startup-cache file while protecting the rest of the disposable profile,
+  avoid binary pipelines in legacy Windows fixtures, and preserve Bash 3.2
+  standalone uninstall.
+- Ignore identity elements that are off-page, clipped, zero-area or zero-font
+  size in Gate 3, so a hidden decoy author, date or headline can no longer
+  satisfy the JSON-LD match. Block WebSocket connections and service workers in
+  the Gate 3 browser contexts.
+- Catch plural P0 mentions in Gate 4 and check reviewer category scores against
+  the rubric maximums and the overall score. Warn when the draft changed after
+  the review nonce was issued.
+- Scan Gate 5 HTML byte limits in linear time. Fail cleanly on malformed URLs
+  and non-object target files, and write a blocked placeholder report at the
+  start of every run so a crashed or capped run cannot leave a stale passing
+  report. Check wordCount against `<main>` when there is no `<article>`, accept
+  `mailto:` links, parse JSON-LD blocks one by one, and warn that the retired
+  `preflight-allowlist.json` is ignored.
+- Allow render and hero output paths under a root-owned system symlink such as
+  `/home` or macOS `/tmp`, while still refusing symlinks inside the output
+  tree, at the leaf, or created by the user in an ancestor.
+- Block CGNAT, site-local IPv6 and wrapped IPv4 addresses (mapped, 6to4,
+  NAT64) in the hero fetcher, using `is_global` semantics.
+- Stop `analyze_blog.py` from crashing on non-string JSON-LD `@type` values or
+  deeply nested JSON-LD, and let `--batch` report a bad file without aborting.
+- Count a disclosed methodology as a bonus on top of the originality synthesis
+  floor instead of replacing it (upstream PR #90).
+- Report the real Google error reason and redact credentials in
+  `youtube_search.py` (issue #65).
+- Add `--force-adopt` (Unix) with backups and clearer recovery text for modified
+  managed files, make `uninstall.sh` report honestly when no manifest exists,
+  fix the installer command listing for escaped pipes, install dependencies
+  with `pip --user` or in a virtual environment instead of system-wide, and
+  give clearer Python 3.11 guidance for macOS.
+- Correct stale or unsupported guidance: the September 2026 spam update
+  baseline (Sep 24 to Oct 8), the QAPage status, and statistics without a
+  verifiable source. Mark the case-study template's example figures as
+  illustrative.
+- Document one delivery sequence for write and rewrite: render, issue the
+  review nonce, review, then gates. The orchestrator saves `review.md`
+  verbatim, resolves every draft placeholder before render, and re-renders,
+  re-issues the nonce and re-reviews after any later edit. The delivery
+  contract holds the sequence once and the hub, `blog-write`, `blog-rewrite`
+  and `delivery.md` link to it.
+- Block a review issued for a draft that has since changed: the nonce state
+  records sha256 digests of the markdown, HTML, PDF and hero, and any change
+  or removal afterwards is a Gate 4 violation. Older state keeps a warning.
+- Gate 2 now rejects leftover `[INTERNAL-LINK`, `[IMAGE` and `[CHART`
+  placeholders, non-slug filenames, a hero that fails to decode, has the wrong
+  format or is under 1200x630, a PDF with no pages, an HTML render whose
+  `blog-source-sha256` does not match its markdown, active content (scripts,
+  event handlers, `javascript:` URLs, iframes, objects, embeds), and static
+  structure defects: missing `lang`, title, meta description or Open Graph
+  tags, more than one H1, skipped heading levels, `noindex`, and missing image
+  alt text.
+- Name rendered outputs from the `slug` frontmatter key, else from the markdown
+  file stem, so the documented minimal frontmatter passes Gate 2. Gate 2 lists
+  the stems it found and the missing-canonical message names the frontmatter
+  keys the renderer reads. The delivery contract has a required-frontmatter
+  table, and the `blog-write` template carries the keys the gates need.
+- Warn when frontmatter `slug` differs from the markdown file name (Gate 2 needs
+  one shared name, so rename the file to `<slug>.md`), and accept a UTF-8 byte
+  order mark before the frontmatter.
+- Render an optional `lastUpdated` (alias `dateModified`) as JSON-LD
+  `dateModified`, `article:modified_time` and a visible "Updated" line, and
+  refuse invalid values or a date earlier than `date`.
+- Keep the last gate diagnostics (`previous_gates`) when the repair iteration
+  cap is reached, accept valid JPEG heroes that carry trailing metadata, and
+  name the failing resource in Gate 3 console errors.
+- Give the reviewer output template the affirmative `zero P0 issues found`
+  line, tell the rewrite pipeline to copy locally referenced images, and tell
+  the orchestrator to credit CC BY and BY-SA heroes from `hero-credit.txt`.
+- Detect a rendered HTML body that was hand-edited after render (the renderer
+  wraps the body in `bs-body` markers and adds a `blog-body-sha256` meta that
+  Gate 2 recomputes), and flag article text that is in the page but not
+  rendered (`display:none`, font-size 0, off-screen, clipped): a violation at
+  100 characters or 3 elements, a warning below.
+- Embed `blog-source-sha256` in rendered HTML, mark the generated footer link
+  so Gate 5 does not fetch it (a fully local article can pass offline), name
+  the overflowing SVG element and the schema versus visible values in gate
+  messages, make inline SVG and tables responsive, refuse `.html` as markdown
+  input, and name leftover placeholders on stderr.
+- Lock `quality_gate.py` closed (missing paths, missing frontmatter and
+  nonsensical thresholds fail; `--select` keeps the pre-commit filtering),
+  compare FLOW sync drift on upstream bodies instead of the daily sync date,
+  make the `blog-flow` script a wrapper around the core one, and add the CC BY
+  modification notice to synced headers.
+- Send Google API keys in the `x-goog-api-key` header and redact keys and
+  tokens on every Google script error path, including URL-encoded, JSON and
+  header forms. Stop indexing batches on quota, require `--confirm-eligible`
+  (the Indexing API supports only JobPosting and BroadcastEvent in
+  VideoObject pages), stop URL Inspection batches on quota, fix the
+  `gsc_query` window and `--limit 0` loop, surface YouTube comment errors, and
+  block NAT64-wrapped private addresses with a fetch deadline in
+  `nlp_analyze.py`.
+- Default hero generation to `gemini-nano-banana-2.1`, accept
+  `GEMINI_API_KEY`, and stop the model fallback ladder on key, billing or
+  quota errors. Default audio to `gemini-3.8-flash-tts`, warn that the legacy
+  aliases shut down on 2026-11-17, and cap runs with `--max-chunks`.
+- Accept both `notebook.google.com` and `notebooklm.google.com` by exact
+  hostname, store NotebookLM state with 0700/0600 permissions, refuse symlinked
+  state, disable downloads, and return notebook answers as labelled untrusted
+  content.
+- Make paid and credentialed skills (image, audio, NotebookLM, Google) open
+  with a cost and consent gate and explicit-intent descriptions, require a
+  dry-run plan and explicit approval before any `blog-taxonomy` CMS write, and
+  stop `blog-cluster` from editing posts that already passed delivery.
+- Run the delivery contract once per locale in the multilingual chain; translate
+  and localize skip their own run when orchestrated.
+- Bound quadratic analyzer regexes, fail `lint_prose.py` on undecodable files,
+  normalize URLs in `content_decay.py`, keep the hero eager in
+  `blog_hygiene.py`, refuse to overwrite a profile in `style_learn.py` on zero
+  posts, and follow a root-owned OS alias such as `/home` in the installer
+  ownership check.
+- Protect Brain tooling: demo vaults need a marker before deletion, report
+  writers refuse symlinks, roadmap edits are preserved, `lint_vault.py`
+  separates unreadable input from lint failures, and `verify_source_ledger.py`
+  decodes gzip and writes `research-reviewed`.
+- CI installs the pinned Chromium and fails, instead of skipping, browser-gated
+  tests when `CLAUDE_BLOG_REQUIRE_BROWSER=1`; tolerates exactly the reserved
+  plugin-name finding from `claude plugin validate`; installs all four hash
+  locks on Linux, Windows and macOS; adds Python 3.13 and 3.14 and
+  `uv lock --check`. The hash locks are now universal.
+- Give the PowerShell installers `-ForceAdopt` with timestamped backups,
+  user-level dependency installs that report failure, and validated git inputs.
+
+### Changed
+
+- Re-review 83 Brain source records against their live pages on 2026-10-12:
+  73 confirmed, 7 qualified, 3 corrected (Ahrefs API scope, TTFB, FAQ rich
+  result record) and one mismatched excerpt replaced. Refresh dates advance to
+  2026-11-12; the audit needs the same monthly review to stay current.
+- Draft-stage scoring now defines how site-level items are scored or marked
+  N/A, and every score threshold sits in one table in `quality-scoring.md`.
+  The researcher agent no longer scrapes stock sites or builds CDN URLs, and
+  the `blog-seo` agent matches the `blog-seo-check` skill.
+- Add Google's 2026-10-05 helpful-content guidance on authorship integrity,
+  date changes and AI disclosure, and subject-led sentence pattern descriptions
+  for the writer and reviewer (issue #72, unproven as a fix). List sub-skill
+  fallbacks and skips in the blog-write final summary (org issue #60).
+- Credit the contributors of upstream PRs #83, #82, #73 and #90 in
+  `docs/CONTRIBUTORS.md`.
+- Shorten the plugin description to under 400 characters, add `displayName`, and
+  declare `blog-chart` as `user-invocable: false`, replacing the misspelled
+  `user-invokable`. The skill no longer appears in the command menu.
+
+- Resolve skill helpers from trusted installed paths, focus article prose on
+  the subject, and select evidence and media according to the reader's task.
+- Require separate delivery review for every locale and reconcile the P0
+  delivery gate with the unchanged 70-point configurable quality gate.
+- Differentiate 25 duplicated FLOW task prompts while preserving their names,
+  stage routing, attribution and reviewed upstream synchronization boundary.
+- Refresh Google guidance and its Brain projection from reviewed official
+  October sources, and qualify current Gemini and NotebookLM interfaces.
+- Refresh bounded dependencies and hash locks for Python 3.11 compatibility.
+  Retain the reported, unpatched NLTK model-artifact advisory as an explicit
+  limitation; no advisory-free claim is made.
+- Add Gemini 3.8 TTS with Interactions schema and WAV checks. `flash38` is now
+  the default audio model, `--max-chunks` (default 12) caps the cost of a run,
+  and every legacy alias remains available with a deprecation warning.
+- Correct active Brain readiness and version claims, distinguish model-provider
+  processing from local artifact storage, and remove unsupported fixed quotas.
+- Expand routing and recovery evaluations, public distribution checks, and
+  source-date workflow diagnostics.
+- Keep the Claude plugin identifier `claude-blog`, the repository,
+  marketplace, standalone `/blog` commands, aliases and Python package
+  identity unchanged. Claude Code 2.1.292 and later report the `claude-`
+  prefix as reserved when validating the plugin, as they do for v2.2.0; the
+  prior validator 2.1.218 passes. See the README known issues.
+- Add opt-in persistent runtime directories for audio, Google and NotebookLM,
+  and a persistent FLOW snapshot selector shared by sync and downstream reads.
+  Existing standalone defaults remain available; no installed state is moved.
+- Review all prior Brain sources against content, retain 127 active reviewed
+  records and archive three retired records. The executable local Brain audit
+  passes at 98/100; historical ledger dates and raw snapshots remain intact.
+- Validate native plugin routing, controlled writing and default Chromium
+  rendering using the current host and matching isolated browser runtime.
+- Add explicit Linux/macOS installer and Windows PowerShell 5.1/7 CI jobs,
+  and validate both the prior and current Claude plugin validators.
+
+### Known verification limits
+
+- The pinned optional image MCP package still exposes retired preview models.
+  Use the documented direct API or stock-image route until it supports live IDs.
+- Authenticated Google, Gemini and NotebookLM operations remain unverified.
+  Native route selection does not execute all 30 workflows. Single-pass writing
+  samples require factual review and correction before delivery.
+- No release or installed-profile migration is included. The installer smoke
+  test passed on GitHub's Windows runners (Windows PowerShell 5.1 and
+  PowerShell 7) for these changes; real junctions and the macOS runners had not
+  run when this was written, so check the CI result of the merge commit.
+- The review nonce stops accidents and casual forgery. A process running as
+  the same user can still read the verifier state. Redirect targets are
+  validated but not followed, so a redirect to a dead page passes Gate 5.
+- Notebook answers, selectors and login flow were not exercised against a live
+  browser, and the `x-goog-api-key` header is documented generally by Google
+  Cloud but not shown on the PSI and CrUX pages.
+- Brain review fields are attested by the reviewer, and 127 active records map
+  to 97 distinct URLs. Records marked as living documents need a monthly
+  review.
+- `claude plugin validate` on Claude Code 2.1.292 and later reports the
+  `claude-` prefix of the plugin name as reserved. CI runs both validators and
+  tolerates exactly that one finding; any other finding still fails. Whether a
+  real plugin install refuses the name has not been tested.
 
 ## [2.2.0] - 2026-08-26
 

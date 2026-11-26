@@ -2,14 +2,12 @@
 
 ## Raw Sources
 
-- `.raw/sources/claude-blog-skill/`: immutable local claude-blog v1.11.0
-  snapshot captured 2026-07-09, covering 32 skill directories
-  (1 orchestrator + 31 sub-skills), 30 user-facing commands, 5 agents,
-  14 scripts, 22 references, 12 templates, plugin metadata, README, license,
-  changelog, and top docs.
 - `.raw/sources/claude-blog-brain-data/google-updates.json`: immutable
   historical snapshot of the repo's Google update ledger captured 2026-07-09.
   It is provenance, not the current ledger.
+- The live claude-blog skill surface (`skills/`, `agents/`, `scripts/`, and
+  plugin metadata at the repository root) is the current reference; the Brain
+  keeps no raw copy of it.
 - Google Search Central docs; web.dev CWV; FLOW framework bibliography;
   GEO/AEO studies; content-marketing and copywriting research.
 
@@ -27,6 +25,31 @@
 - Record path, hash, retrieval date, owner, and source type.
 - Use `sha256` only and keep all raw paths vault-relative.
 - Record external research sources in `references/source-ledger.json`.
+- Give each record an explicit lifecycle: `active`, `retired` or `unverified`.
+  Only active, reviewed, unexpired evidence can support current recommendations.
+  Retired records retain their historical dates and name active replacement IDs
+  and a retirement reason; do not fetch or refresh them as current evidence.
+- For active records, review the claim scope against content, record the actual
+  retrieval and review dates separately from publication/update dates, and keep
+  limitations visible. Record the excerpt, rationale, normalized SHA-256 and
+  safe repository-relative full-capture path in `verification`. Also record
+  `captured_excerpt_path` and `captured_excerpt_sha256` for the packaged reviewed
+  excerpt artifact under `references/evidence/`. Availability and token overlap
+  are diagnostics, not claim verification.
+- `verify_source_ledger.py --offline-check` requires actual regular,
+  nonsymlinked excerpt artifacts inside that fixed evidence root. It checks
+  file hashes, normalized excerpt agreement, source identity, URL, review and
+  retrieval dates, disposition and the recorded full-document hash binding.
+  The aggregate redistributed excerpts for each document are capped at 25
+  words. The offline gate does not recompute the full-document digest, prove
+  full-page availability or determine semantic entailment. Preserve the
+  separate full-capture pack and independently check its hashes and excerpts.
+  Secure descriptor-relative reads are verified on Linux and fail closed on
+  unsupported platforms. Coverage is the unique paths referenced by active
+  sources, with every artifact record and excerpt bound to the active ledger.
+  Unreferenced and historical files are outside this gate. A new retrieval
+  attempt must not overwrite a
+  successful review until its claims are reviewed.
 - When a ledger entry relies on a captured raw file, record
   `raw_snapshot_path` and `raw_snapshot_sha256`.
 - Record implemented schemas and adapters in `references/adapter-manifest.json`.
